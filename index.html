@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XLSX 条件求和工具</title>
+  <link rel="icon" type="image/svg+xml" href="icon/logo.svg">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <!-- 全局隐藏 file input -->
+  <input type="file" id="file-input" accept=".xlsx" hidden>
+
+  <!-- ══ 左侧工具栏 ══ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <img class="app-logo" src="icon/logo.svg" alt="条件求和工具 Logo">
+      <h1>条件求和工具</h1>
+      <a class="header-github-link" href="https://github.com/Upper-Hank/Demo" target="_blank" rel="noopener noreferrer"
+        title="打开 GitHub">
+        <img class="header-github-icon" src="icon/GitHub.svg" alt="GitHub">
+      </a>
+    </div>
+
+    <div class="mobile-pane-tabs" id="mobile-pane-tabs" hidden>
+      <button type="button" class="pane-tab active" id="btn-pane-tools">设置</button>
+      <button type="button" class="pane-tab" id="btn-pane-preview">预览</button>
+    </div>
+
+    <div class="sidebar-body">
+      <!-- 1. 文件 -->
+      <section class="panel">
+        <div class="panel-label">文件</div>
+        <div class="file-display" id="file-display">
+          <span class="file-name" id="file-name">未选择文件</span>
+          <button type="button" class="btn btn-primary" id="btn-sidebar-upload">
+            <img class="btn-icon-img" src="icon/upload.svg" alt="" aria-hidden="true">
+            上传文件
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. 求和列 -->
+      <section class="panel" id="panel-columns" hidden>
+        <div class="panel-label">求和列</div>
+        <input type="text" class="input" id="col-input" placeholder="例如 E, G, H">
+        <p class="hint">输入列字母, 多列用逗号分隔</p>
+      </section>
+
+      <!-- 3. 求和条件 -->
+      <section class="panel" id="panel-rules" hidden>
+        <div class="panel-label-row">
+          <span class="panel-label" style="margin-bottom:0">求和条件</span>
+          <div class="logic-toggle" id="logic-toggle" role="group" aria-label="条件组合方式">
+            <button type="button" class="logic-btn active" data-logic="OR">任一命中即剔除</button>
+            <button type="button" class="logic-btn" data-logic="AND">全部命中才剔除</button>
+          </div>
+        </div>
+
+        <p class="hint">所有条件都用于“剔除单元格”；未添加条件时，对所选列全部数值求和。</p>
+        <div class="rules-list" id="rules-list"></div>
+        <button type="button" class="btn btn-outline btn-block btn-add-rule" id="btn-add-rule">
+          <img class="btn-icon-img" src="icon/plus.svg" alt="" aria-hidden="true">
+          添加条件
+        </button>
+
+        <div class="panel-label" style="margin-top:14px;">指定剔除单元格（作为条件）</div>
+        <div class="exclude-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="btn-toggle-exclude-pick">开启点选剔除</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-clear-excludes">清空</button>
+        </div>
+        <p class="hint">开启后，在右侧预览点击单元格可剔除/恢复；剔除包含 sheet 和坐标。</p>
+        <div class="exclude-list" id="exclude-list"></div>
+      </section>
+
+      <!-- 5. 执行 -->
+      <section class="panel panel-execute-bottom" id="panel-execute" hidden>
+        <button type="button" class="btn btn-primary btn-block" id="btn-run">
+          执行条件求和
+        </button>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ══ 右侧主区域 ══ -->
+  <main class="main" id="main">
+    <!-- 空状态 -->
+    <div class="empty-state" id="empty-state">
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-icon">
+          <img class="empty-file-icon" src="icon/file.svg" alt="文件图标">
+        </div>
+        <h2>上传 Excel 文件</h2>
+        <p>支持 .xlsx 格式<br>文件仅在浏览器本地处理，不会上传到服务器</p>
+        <ul class="feature-list">
+          <li>在左侧点击 <strong>选择文件</strong> 开始处理</li>
+          <li>可配置列范围、排除条件（颜色/数值/公式）</li>
+          <li>支持原始文件与输出结果双预览</li>
+        </ul>
+        <span class="drop-hint">也支持将文件拖拽到此区域</span>
+      </div>
+    </div>
+
+    <!-- 预览状态 -->
+    <div class="preview-state" id="preview-state" hidden>
+      <div class="preview-toolbar">
+        <div class="view-tabs" id="view-tabs">
+          <button class="view-tab active" data-view="source">原始文件</button>
+          <button class="view-tab is-disabled" data-view="result" data-disabled="true" id="tab-result"
+            title="需要先进行运算（统计汇总）">结果汇总</button>
+          <button class="view-tab is-disabled" data-view="output" data-disabled="true" id="tab-output"
+            title="需要先进行运算（可下载文件）">最终文件</button>
+        </div>
+        <span class="preview-note">预览模式，不可编辑</span>
+        <div class="toolbar-right">
+          <span class="row-info" id="row-info"></span>
+          <div class="zoom-controls" role="group" aria-label="预览缩放">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-zoom-out" title="缩小"><img class="btn-icon-img"
+                src="icon/minus.svg" alt="" aria-hidden="true"></button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-zoom-reset" title="重置缩放"><span
+                id="zoom-value">100%</span></button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-zoom-in" title="放大"><img class="btn-icon-img"
+                src="icon/plus.svg" alt="" aria-hidden="true"></button>
+          </div>
+          <button type="button" class="btn btn-success btn-sm" id="btn-download" hidden>
+            <img class="btn-icon-img" src="icon/download.svg" alt="" aria-hidden="true">
+            下载最终文件
+          </button>
+        </div>
+      </div>
+      <div class="sheet-tabs" id="sheet-tabs"></div>
+      <div class="table-container" id="table-container">
+        <div class="table-loading" id="table-loading" hidden>
+          <div class="spinner"></div>
+        </div>
+        <table class="preview-table" id="preview-table"></table>
+      </div>
+      <section class="panel panel-download-bottom" id="panel-download-mobile" hidden>
+        <button type="button" class="btn btn-success btn-block" id="btn-download-mobile">
+          <img class="btn-icon-img" src="icon/download.svg" alt="" aria-hidden="true">
+          下载最终文件
+        </button>
+      </section>
+    </div>
+  </main>
+
+  <!-- 全屏 Loading -->
+  <div class="loading-overlay" id="loading" hidden>
+    <div class="spinner lg"></div>
+    <p class="loading-text" id="loading-text">处理中…</p>
+  </div>
+
+  <!-- 自定义弹窗：重新上传确认 -->
+  <div class="modal-overlay" id="modal-reupload" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reupload-title">
+      <div class="modal-head">
+        <h3 id="reupload-title">重新上传文件？</h3>
+      </div>
+      <div class="modal-body">
+        <p>重新上传会顶替当前文件，已配置的求和列、条件和手动剔除会被清空。</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="btn-reupload-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-reupload-confirm">继续上传</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自定义弹窗：添加条件 -->
+  <div class="modal-overlay" id="modal-add-rule" hidden>
+    <div class="modal-card modal-card-lg" role="dialog" aria-modal="true" aria-labelledby="add-rule-title">
+      <div class="modal-head">
+        <h3 id="add-rule-title">添加剔除条件</h3>
+      </div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0">选择条件类型、比较关系，然后选择或输入匹配值。</p>
+        <div class="modal-rule-builder" id="modal-rule-builder"></div>
+        <p class="modal-hit-preview" id="modal-rule-hit-preview">当前条件选中了<span class="hit-number">0</span>个单元格</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="btn-add-rule-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-add-rule-confirm">添加条件</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+
+</html>
